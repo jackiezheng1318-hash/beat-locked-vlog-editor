@@ -1,0 +1,13 @@
+bin/
+work/
+out/
+__pycache__/
+*.pyc
+.DS_Store
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.mp3
+*.wav
+*.m4a
