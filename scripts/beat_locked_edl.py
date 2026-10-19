@@ -6,6 +6,8 @@ Shot list CSV columns: path,search_in,search_out,bars,note[,ambience][,beauty]
              2 = two bars, ... ; `END` = last shot, runs to --end.
   ambience : optional per-shot raw-audio gain (default --ambience; use 0 for talking/selfie).
   beauty   : 1 = protagonist face on screen -> face_beauty.py retouch + face-safe grade.
+  look     : optional per-shot grade look (golden-sun / overcast / golden-hour / night / indoor / snow);
+             empty = the video-level look.
   Any other extra column is copied into the EDL unchanged.
 Every cut is placed on a measured downbeat from beat_grid.py (half bars on measured beats),
 floored to the frame at/just before the kick attack, so music and picture stay locked even if
@@ -22,6 +24,7 @@ Writes <out_prefix>.json and <out_prefix>.csv (first five columns = project EDL 
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import csv
 import json
 import os
@@ -36,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser()
     for a in ('shots', 'beats', 'stability', 'out_prefix'):
         ap.add_argument(a)
-    ap.add_argument('--fps', type=int)
+    ap.add_argument('--fps', type=Fraction)  # e.g. 50, 60000/1001
     ap.add_argument('--end', type=float, required=True)
     ap.add_argument('--music-offset', type=float, default=0.0)
     ap.add_argument('--ambience', type=float, default=0.1)
@@ -52,7 +55,7 @@ def main():
     if not a.fps:
         r = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate',
                             '-of', 'json', shots[0]['path']], capture_output=True, text=True).stdout
-        n, d = json.loads(r)['streams'][0]['r_frame_rate'].split('/'); a.fps = round(int(n) / int(d))
+        a.fps = Fraction(json.loads(r)['streams'][0]['r_frame_rate'])
     t = 0.0; bar = 0.0; rows = []
     for k, s in enumerate(shots):
         if s['bars'].strip().upper() == 'END':
@@ -60,8 +63,9 @@ def main():
         else:
             bar += float(s['bars'])
             t1 = down[int(bar)] if bar == int(bar) else half[int(bar * 2)]
-        f0 = 0 if k == 0 else int(np.floor(t * a.fps + 1e-6)); f1 = int(np.floor(t1 * a.fps + 1e-6))
-        n = f1 - f0; dur = n / a.fps
+        fps = float(a.fps)
+        f0 = 0 if k == 0 else int(np.floor(t * fps + 1e-6)); f1 = int(np.floor(t1 * fps + 1e-6))
+        n = f1 - f0; dur = n / fps
         st = stab[os.path.splitext(os.path.basename(s['path']))[0]]
         jit = np.array(st['jit']); sfps = st['fps']; need = int(round(dur * sfps))
         lo, hi = float(s['search_in']), float(s['search_out']); best = None
@@ -74,7 +78,7 @@ def main():
         amb = s.get('ambience') or ''
         rows.append(dict(order=k + 1, path=s['path'], start=round(best[1], 3), duration=round(dur, 4),
                          audio_gain=float(amb) if amb.strip() else a.ambience, frames=n,
-                         timeline_in=round(f0 / a.fps, 3), timeline_out=round(f1 / a.fps, 3),
+                         timeline_in=round(f0 / fps, 3), timeline_out=round(f1 / fps, 3), fps=str(a.fps),
                          bars=s['bars'], jitter=round(float(best[0]), 3), note=s['note'],
                          **{k: v for k, v in s.items() if k not in BASE}))  # pass-through, e.g. beauty
         t = t1

@@ -26,6 +26,11 @@ WIN = np.outer(np.hanning(H), np.hanning(W))
 
 
 def decode(path):
+    global W, H, WIN
+    st = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height',
+                                    '-of', 'json', path], capture_output=True, text=True).stdout)['streams'][0]
+    W, H = (108, 192) if int(st['height']) > int(st['width']) else (192, 108)  # keep orientation
+    WIN = np.outer(np.hanning(H), np.hanning(W))
     for hw in (['-hwaccel', 'videotoolbox'], []):
         r = subprocess.run(['ffmpeg', '-v', 'error', *hw, '-i', path, '-an', '-vf',
                             f'fps={FPS},scale={W}:{H},format=gray', '-f', 'rawvideo', '-'], stdout=subprocess.PIPE)

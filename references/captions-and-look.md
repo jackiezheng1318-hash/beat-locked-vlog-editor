@@ -19,17 +19,33 @@
 - Each caption enters and leaves on its shot's cut, so captions are on the beat too.
 - Deliver both the captioned and the caption-free file.
 
-## Adaptive warm grade (`adaptive_grade.py`)
+## Scene-aware grade (`adaptive_grade.py`)
 
-Per shot, three frames are measured (mean luma, R/B warmth ratio, share of near-white pixels):
+**1. Identify the scene** — light/weather, season (clip `creation_time`, foliage, clothing; southern
+hemisphere flips), place type. Look at the contact sheets first; `adaptive_grade.py --suggest edl.json`
+gives a hint from sky blue/grey share, vegetation, warmth, luma and contrast. It cannot separate
+"indoors" from "outdoors under a market awning" (both warm, saturated, skyless), so you decide, and
+for mixed footage set a per-shot `look` column.
 
-- warmth factor = clip(1 − (R/B − 1.05) × 2, 0.35, 1)  — already-warm shots get less
-- brightness factor = clip(1 − (luma − 115) / 150, 0.55, 1) — bright sun gets less
-- × 0.45 on face shots; softer highlight roll-off when bright
+**2. Pick a look** (`render_beat_locked.py --adaptive-grade`, auto by default, `--look` / `--season` to force):
 
-Chain (16-bit planar RGB): colour temperature 5400 K mix → master curve with gentle contrast →
-colour balance (cool shadows, warm highlights) → vibrance → Rec.709 saturation matrix.
-For a neutral look omit `--adaptive-grade`; for your own look use `--grade-file` (16-bit-safe filters only).
+| Look | Scene | What it does |
+|---|---|---|
+| golden-sun | sunny day | warm highlights, slightly cool shadows, gentle contrast (author-approved baseline) |
+| overcast | grey sky | little warmth (warming grey sky looks dirty), more contrast + vibrance, neutral sky |
+| golden-hour | low sun, already warm | barely add warmth, protect highlights |
+| night | city night | no warming, deep blacks kept, teal-ish shadows, colour lifted |
+| indoor | artificial light | neutralise the orange cast, mild contrast |
+| snow | winter snow | clean cool whites, lifted exposure, restrained colour (auto only in winter) |
+
+Season modifier on warmth: spring 0.8 (+ fresher greens), summer/autumn 1.0, winter 0.6.
+
+**3. Per shot inside the look** — warmth factor = clip(1 − (R/B − 1.05) × 2, 0.35, 1) × clip(1 −
+(luma − 115) / 150, 0.55, 1), × 0.45 on face shots; brighter shots get a softer highlight roll-off.
+`looks.json` records each shot's look and factor, `scene-look.json` the scene decision and reasons.
+
+New scene? Research colourist practice / open LUTs, read them before use, add a 16-bit-safe entry to
+`LOOKS` (no `eq`), and show a before/after to the user the first time.
 
 ## Face retouch (`face_beauty.py`, macOS)
 

@@ -33,7 +33,8 @@ Ask with the question tool, one round, only what is missing:
 1. **Captions?** — none (default) / opening title only / opening title + place labels.
    Always ask this first; never decide it for the user.
 2. **What should viewers remember?** One sentence (e.g. "a relaxed autumn Saturday downtown").
-3. Raw folder, BGM file, target length (approximate), aspect (keep source / vertical crop).
+3. Raw folder, BGM file, target length (approximate). Aspect, resolution and frame rate follow the
+   source (vertical stays vertical, 1080 stays 1080, 4K stays 4K, 59.94 stays 59.94) — don't ask.
 4. Must-keep / must-drop shots, people to retouch (the main person only), places to feature.
 
 ## 2. Measure the music
@@ -105,7 +106,15 @@ python scripts/render_beat_locked.py work/edl.json <bgm> out/final.mp4 work/rend
 - Output = source resolution, frame rate and 10-bit HEVC (CRF 16). The script refuses to
   downscale unless `--allow-downscale` (only on explicit request, as a separate file).
 - Graded once in 16-bit RGB, encoded once; fade baked into the last shot; final mux is a copy.
-- `--adaptive-grade` = warm "golden sun" look scaled down per shot on bright/warm shots and faces.
+- `--adaptive-grade` = scene-aware grade. First identify the scene yourself from the contact sheets
+  (light/weather × season × place) and check it against `python scripts/adaptive_grade.py --suggest
+  work/edl.json`; the renderer picks a look for the whole video (golden-sun, overcast, golden-hour,
+  night, indoor, snow, with a season modifier from the clip date) and then scales warmth per shot
+  (less on bright/warm shots and faces). Override with `--look` / `--season` (`--south` for the
+  southern hemisphere); for mixed indoor/outdoor footage set a per-shot `look` column in shots.csv.
+  The stats cannot tell indoors from "outdoors under an awning" — your visual judgement decides.
+  For a scene no look covers (beach, neon night, snowy peaks…), research colourist references / open
+  LUTs, add a 16-bit-safe look to `LOOKS`, and show the user a before/after first.
   Omit for no grade, or `--grade-file` for your own 16-bit-safe filter chain (no `eq`).
 - BGM starts at 0 s with no fade-in when the song opens on a kick. Use `--music-offset` if a cold
   open plays before the music.

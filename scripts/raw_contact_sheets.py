@@ -22,7 +22,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 def thumbs(clip, every, tmp):
     stem = os.path.splitext(os.path.basename(clip))[0]; d = os.path.join(tmp, stem); os.makedirs(d, exist_ok=True)
-    subprocess.run(['ffmpeg', '-v', 'error', '-i', clip, '-vf', f'fps=1/{every},scale=256:-2', '-q:v', '5',
+    subprocess.run(['ffmpeg', '-v', 'error', '-i', clip, '-vf', f'fps=1/{every},scale=256:256:force_original_aspect_ratio=decrease', '-q:v', '5',
                     os.path.join(d, '%05d.jpg')], check=True)
     return stem, sorted(os.path.join(d, f) for f in os.listdir(d))
 
@@ -32,10 +32,13 @@ def main():
     ap.add_argument('--every', type=float, default=2.0); ap.add_argument('--cols', type=int, default=8)
     ap.add_argument('--rows', type=int, default=8); a = ap.parse_args()
     stab = json.load(open(a.stability)); os.makedirs(a.out, exist_ok=True)
-    try:
-        font = ImageFont.truetype('/System/Library/Fonts/Supplemental/Arial.ttf', 16)
-    except OSError:
-        font = ImageFont.load_default()
+    font = ImageFont.load_default()
+    for fp in ('/System/Library/Fonts/Hiragino Sans GB.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+               'C:/Windows/Fonts/msyh.ttc', '/System/Library/Fonts/Supplemental/Arial.ttf'):
+        try:
+            font = ImageFont.truetype(fp, 16); break
+        except OSError:
+            continue
     items = []
     with tempfile.TemporaryDirectory() as tmp, concurrent.futures.ThreadPoolExecutor(4) as ex:
         for stem, files in ex.map(lambda c: thumbs(c, a.every, tmp), a.clips):
@@ -43,7 +46,8 @@ def main():
             for i, f in enumerate(files):
                 t = i * a.every; seg = jit[int(t * sf):int((t + a.every) * sf)]
                 items.append((stem, t, Image.open(f).copy(), float(np.median(seg)) if len(seg) else 0.0))
-    TW, TH = 256, 144; per = a.cols * a.rows
+    TW, TH = items[0][2].size if items else (256, 144)  # keep source orientation (vertical stays vertical)
+    per = a.cols * a.rows
     for s in range(0, len(items), per):
         im = Image.new('RGB', (a.cols * TW, a.rows * (TH + 20)), (15, 15, 15)); d = ImageDraw.Draw(im)
         for k, (stem, t, th, j) in enumerate(items[s:s + per]):
@@ -51,7 +55,8 @@ def main():
             im.paste(th.resize((TW, TH)), (x, y))
             col = (80, 200, 80) if j < 0.35 else (230, 200, 60) if j < 0.7 else (230, 70, 70)
             d.rectangle([x, y + TH, x + 7, y + TH + 20], fill=col)
-            d.text((x + 11, y + TH + 2), f'{stem[-12:]} @{t:.0f}s', fill='white', font=font)
+            label = f'{stem[-12:]} @{t:.0f}s' if len(a.clips) > 1 else f'@{t:.0f}s'
+            d.text((x + 11, y + TH + 2), label, fill='white', font=font)
         im.save(os.path.join(a.out, f'sheet-{s // per + 1:02d}.jpg'), quality=82)
     print(len(items), 'thumbnails ->', (len(items) + per - 1) // per, 'sheets in', a.out)
 

@@ -49,7 +49,9 @@ Every cut sits on the frame at or just before the kick (0–20 ms early reads as
 
 ## 5. Picture and sound
 
-- Warm grade per shot (`--adaptive-grade`): bright and already-warm shots and faces get less warmth.
+- Scene-aware grade (`--adaptive-grade`): pick the look from the footage (sunny / overcast / golden hour /
+  night / indoor / snow × season), then per shot: bright and already-warm shots and faces get less warmth.
+  One warm look everywhere turns grey skies muddy and indoor light orange.
 - Face retouch (`beauty=1`) on the main person only: blemishes off, features sharp, no reshaping.
 - BGM from 0 s, no fade-in when the song opens on a kick; fade out from the last phrase start.
 - Street ambience low (≈ −20 dB) under the music; mute selfie chatter that was not reviewed.

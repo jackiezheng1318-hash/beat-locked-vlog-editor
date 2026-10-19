@@ -25,6 +25,7 @@ Usage: face_beauty.py <src> <start> <frames> <out.mp4> --detector <detect_faces 
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import json
 import os
 import subprocess
@@ -105,7 +106,7 @@ def face_mask(face, W, H):
 
 
 DEFAULT_ENC = ['-c:v', 'libx265', '-preset', 'medium', '-crf', '16', '-pix_fmt', 'yuv420p10le', '-profile:v', 'main10',
-               '-tag:v', 'hvc1', '-x265-params', 'log-level=error',
+               '-tag:v', 'hvc1', '-x265-params', 'log-level=error:bframes=0',  # no B-frames: pts == dts, frame-exact joins
                '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709']
 
 
@@ -129,8 +130,7 @@ def retouch(frame, face, strength):
 def probe_fps(path):
     st = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
                                     'stream=r_frame_rate', '-of', 'json', path], capture_output=True, text=True).stdout)
-    n, d = st['streams'][0]['r_frame_rate'].split('/')
-    return round(int(n) / int(d))
+    return Fraction(st['streams'][0]['r_frame_rate'])
 
 
 def probe_size(path):
@@ -143,15 +143,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('src'); ap.add_argument('start', type=float); ap.add_argument('frames', type=int); ap.add_argument('out')
     ap.add_argument('--detector', required=True); ap.add_argument('--width', type=int); ap.add_argument('--height', type=int)
-    ap.add_argument('--fps', type=int); ap.add_argument('--grade', default='')
+    ap.add_argument('--fps', type=Fraction); ap.add_argument('--grade', default='')
     ap.add_argument('--strength', type=float, default=0.85); ap.add_argument('--step', type=int, default=4)
     ap.add_argument('--enc', default=json.dumps(DEFAULT_ENC)); ap.add_argument('--preview')
     a = ap.parse_args(); N = a.frames
     W, H = (a.width, a.height) if a.width and a.height else probe_size(a.src)
     if not a.fps:
         a.fps = probe_fps(a.src)
+    FS = f'{a.fps.numerator}/{a.fps.denominator}'
+    TS = str(a.fps.numerator if a.fps.denominator > 1 else a.fps.numerator * 1000)
     vf = (f'scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos:in_color_matrix=bt709,'
-          f'crop={W}:{H},setsar=1,fps={a.fps}')  # RGB round trip pinned to bt709 so colours match other shots
+          f'crop={W}:{H},setsar=1,fps={FS}')  # RGB round trip pinned to bt709 so colours match other shots
     with tempfile.TemporaryDirectory() as tmp:  # pass 1: detection on small frames
         subprocess.run(['ffmpeg', '-v', 'error', '-ss', f'{a.start:.3f}', '-i', a.src, '-vf',
                         f"{vf},trim=end_frame={N},select='not(mod(n\\,{a.step}))',scale=960:-2", '-fps_mode', 'passthrough',
@@ -166,9 +168,9 @@ def main():
     grade = (a.grade.rstrip(',') + ',') if a.grade else ''
     dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-ss', f'{a.start:.3f}', '-i', a.src, '-frames:v', str(N), '-vf', vf,
                             '-f', 'rawvideo', '-pix_fmt', 'rgb48le', '-'], stdout=subprocess.PIPE)
-    enc = subprocess.Popen(['ffmpeg', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb48le', '-s', f'{W}x{H}', '-r', str(a.fps),
+    enc = subprocess.Popen(['ffmpeg', '-v', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb48le', '-s', f'{W}x{H}', '-r', FS,
                             '-i', '-', '-vf', f'{grade}scale=out_color_matrix=bt709:out_range=tv,format=yuv420p10le',
-                            *json.loads(a.enc), '-video_track_timescale', str(a.fps * 1000), '-y', a.out], stdin=subprocess.PIPE)
+                            *json.loads(a.enc), '-video_track_timescale', TS, '-y', a.out], stdin=subprocess.PIPE)
     done = n = 0; size = W * H * 6
     for i in range(N):
         buf = dec.stdout.read(size)

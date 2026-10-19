@@ -19,9 +19,10 @@
 2. **选最稳的入点**：给每段素材的每 0.1 秒计算手抖程度，在你给定的候选窗口里自动挑最稳的一段。
 3. **镜头长度跟着音乐段落走**：前奏用预告，副歌一小节一刀，音乐停顿时放慢，渐强时用半小节加速，结尾落在乐句的第一拍上。
 4. **审片表**：先出原素材联系表供选镜，再出每个镜头首、中、尾三帧的复核表，查手指入镜、甩镜、招牌没拍全等问题。
-5. **按原规格逐帧渲染**：调色全程 16 位，画面只编码一次；分辨率设得比原素材低时脚本会拒绝导出。
+5. **按原规格逐帧渲染**：画幅、分辨率、帧率都跟原素材一致（竖屏出竖屏，59.94fps 这类分数帧率也能做到逐帧精确）；调色全程 16 位，画面只编码一次；分辨率设得比原素材低时脚本会拒绝导出。
 6. **成片验收**：从成片画面里检测切点，从混音里定位音乐位置，至少 90% 的切点落在节拍 ±40ms 内才算合格。
-7. **可选**：逐镜自适应暖调、主角美颜（仅 macOS）、地名字幕和开头标题。
+7. **按场景调色**：先识别晴天、阴天、黄昏、夜景、室内、雪景和季节，选对应的调色方案，再逐个镜头微调（亮的镜头和人脸少加暖）。
+8. **可选**：主角美颜（仅 macOS）、地名字幕和开头标题。
 
 ## 安装
 
@@ -100,7 +101,9 @@ structure, and the export is **never below the source spec** (e.g. 4K 50 fps 10-
 6. `render_beat_locked.py` grades in 16-bit RGB, encodes once, and outputs at the source resolution, frame rate and bit depth.
 7. `verify_beat_sync.py` measures the cuts from the finished video's pixels; the edit passes when ≥ 90 % of cuts are within ±40 ms of a beat.
 
-Optional extras: per-shot adaptive warm grade, face retouch (macOS only) and captions.
+Also: scene-aware grading (sunny / overcast / golden hour / night / indoor / snow × season, then per-shot
+adjustment), source-spec output including vertical and fractional frame rates (59.94 fps joins are
+frame-exact), plus optional face retouch (macOS only) and captions.
 
 **Install:**
 
